@@ -1,59 +1,72 @@
--- PROBLEM 1
-Create table TRANSACTION_DATA(id int,val decimal);
-INSERT INTO TRANSACTION_DATA(ID,VAL)
-SELECT 1,RANDOM()
-FROM GENERATE_SERIES(1,1000000);
-INSERT INTO TRANSACTION_DATA(ID,VAL)
-SELECT 2,RANDOM()
-FROM GENERATE_SERIES(1,1000000);
-SELECT * FROM TRANSACTION_DATA;
-CREATE or REPLACE VIEW SALES_SUMMARY AS
-SELECT
-ID,
-COUNT(*) AS total_quantity_sold, sum(val) AS total_sales,
-count(distinct id) AS total_orders
-FROM TRANSACTION_DATA GROUP BY ID;
-EXPLAIN ANALYZE
-SELECT * FROM SALES_SUMMARY;
-CREATE MATERIALIZED VIEW SALES_SUMM AS
-SELECT
-ID,
-COUNT(*) AS total_quantity_sold, sum(val) AS total_sales, count(distinct id) AS total_orders
-FROM TRANSACTION_DATA GROUP BY ID;
-EXPLAIN ANALYZE
-SELECT * FROM SALES_SUMM;
-
--- PROBLEM 2
-
-CREATE TABLE customer_data (
-  transaction_id SERIAL PRIMARY KEY,
-  customer_name VARCHAR(100),
-  email VARCHAR(100),
-  phone VARCHAR(15),
-  payment_info VARCHAR(50),
-  order_value DECIMAL,
-  order_date DATE DEFAULT CURRENT_DATE
+-- HR-Analytics: Employee count based on dynamic gender passing (Medium)
+CREATE TABLE employees (
+    emp_id SERIAL PRIMARY KEY,
+    emp_name VARCHAR(50),
+    gender VARCHAR(10)
 );
 
-INSERT INTO customer_data (customer_name, email, phone, payment_info, order_value)
-VALUES
-('M', 'M@example.com', '9131094977', '1234-5678-9012-3456', 500),
-('A', 'A@example.com', '9931094977', '1234-5678-9012-3456', 234),
-('B', 'B@example.com', '9263444151', '9876-5432-1098-7654', 754),
-('C', 'C@example.com', '9263444151', '9876-5432-1098-7654', 300);
+INSERT INTO employees (emp_name, gender) VALUES
+('John', 'Male'),
+('Alice', 'Female'),
+('Robert', 'Male'),
+('Sophia', 'Female');
 
-CREATE OR REPLACE VIEW restricted_sales_data AS
-SELECT
-  customer_name,
-  COUNT(*) AS total_orders,
-  SUM(order_value) AS total_sales
-FROM customer_data
-GROUP BY customer_name;
+CREATE OR REPLACE PROCEDURE get_employee_count_by_gender(
+    IN input_gender VARCHAR,
+    OUT emp_count INT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    SELECT COUNT(*) INTO emp_count FROM employees WHERE gender = input_gender;
+END;
+$$;
 
-SELECT * FROM restricted_sales_data;
+CALL get_employee_count_by_gender('Male', emp_count);
 
-CREATE USER client1 WITH PASSWORD 'password123';
 
-GRANT SELECT ON restricted_sales_data TO client1;
+-- SmartStore Automated Purchase System (Hard)
+CREATE TABLE products (
+    product_id SERIAL PRIMARY KEY,
+    product_name VARCHAR(50),
+    price DECIMAL(10,2),
+    quantity_remaining INT,
+    quantity_sold INT DEFAULT 0
+);
+CREATE TABLE sales (
+    sale_id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(product_id),
+    quantity INT,
+    total_price DECIMAL(10,2)
+);
 
-REVOKE SELECT ON restricted_sales_data FROM client1;
+CREATE OR REPLACE PROCEDURE process_order(
+    IN p_product_id INT,
+    IN p_quantity INT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    available_qty INT;
+    unit_price DECIMAL(10,2);
+BEGIN
+    SELECT quantity_remaining, price INTO available_qty, unit_price
+    FROM products WHERE product_id = p_product_id;
+
+    IF available_qty >= p_quantity THEN
+        INSERT INTO sales(product_id, quantity, total_price)
+        VALUES (p_product_id, p_quantity, unit_price * p_quantity);
+
+        UPDATE products
+        SET quantity_remaining = quantity_remaining - p_quantity,
+            quantity_sold = quantity_sold + p_quantity
+        WHERE product_id = p_product_id;
+
+        RAISE NOTICE 'Product sold successfully!';
+    ELSE
+        RAISE NOTICE 'Insufficient Quantity Available!';
+    END IF;
+END;
+$$;
+
+CALL process_order(1, 2);
