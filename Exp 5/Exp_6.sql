@@ -70,3 +70,4 @@ END;
 $$;
 
 CALL process_order(1, 2);
+
